@@ -91,12 +91,12 @@ end
 
 module Mp1 = Make (D1_logic.Part1)
 
-let%expect_test "Simple test, optionally saving waveforms to disk" =
+let%expect_test "Simple test, optionally saving waveforms to disk, part 1, ascii version" =
   Mp1.test_simple (List.nth_exn samples 0);
   [%expect {| (Result (count 3)) |}]
 ;;
 
-let%expect_test "Simple test with printing waveforms directly" =
+let%expect_test "Simple test with printing waveforms directly, part 1, ascii version" =
   Mp1.test_waves (List.nth_exn samples 0);
   [%expect
     {|
@@ -166,12 +166,12 @@ let%expect_test "Simple test with printing waveforms directly" =
 
 module Mp2 = Make (D1_logic.Part2)
 
-let%expect_test "Simple test, optionally saving waveforms to disk" =
+let%expect_test "Simple test, optionally saving waveforms to disk, part 2, ascii version" =
   Mp2.test_simple (List.nth_exn samples 0);
   [%expect {| (Result (count 8)) |}]
 ;;
 
-let%expect_test "Simple test with printing waveforms directly" =
+let%expect_test "Simple test with printing waveforms directly, part 2, ascii version" =
   Mp2.test_waves (List.nth_exn samples 0);
   [%expect
     {|
