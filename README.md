@@ -23,6 +23,6 @@ def accepting_inputs(direction, amount):
   if old value of current == 0: don't do the count += 1
 ```
 
-The implementation of `D1_byte` is again mostly straightforward. The digits in the input are stored in an ad hoc ring buffer, so that we can treat the hundreds specially later. When it receives a newline, it sends the received command to an embedded `D1_logic` component.
+The implementation of `D1_byte` is again mostly straightforward. The digits in the input are stored in an ad hoc shift register thing, so that we can treat the hundreds specially later. When it receives a newline, it sends the received command to an embedded `D1_logic` component.
 
 The implementation of the tests is uninteresting.
