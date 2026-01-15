@@ -6,8 +6,10 @@
 open! Core
 open! Hardcaml
 open! Signal
+open Util_comb
 
-let num_bits = Common.num_bits
+let num_bits = D1_logic.num_bits
+let num_count_bits = D1_logic.num_count_bits
 
 (* Every hardcaml module should have an I and an O record, which define the module
    interface. *)
@@ -26,7 +28,7 @@ end
 module O = struct
   type 'a t =
     { (* With_valid.t is an Interface type that contains a [valid] and a [value] field. *)
-      count : 'a With_valid.t [@bits 16]
+      count : 'a With_valid.t [@bits num_count_bits]
     }
   [@@deriving hardcaml]
 end
@@ -39,15 +41,6 @@ module States = struct
     | Done
   [@@deriving sexp_of, compare ~localize, enumerate]
 end
-
-let widen ~w a = zero (w - width a) @: a
-
-let rec mul a ?(shift = 0) = function
-  | 0 -> zero (width a)
-  | 1 -> a
-  | by when by mod 2 = 0 -> mul a ~shift:(shift + 1) (by / 2)
-  | by -> sll a ~by:shift +: mul a ~shift:(shift + 1) (by / 2)
-;;
 
 let create scope ({ clock; clear; start; finish; data_in; data_in_valid } : _ I.t) : _ O.t
   =
@@ -66,13 +59,13 @@ let create scope ({ clock; clear; start; finish; data_in; data_in_valid } : _ I.
   let%hw_var tens = Variable.reg spec ~width:5 in
   let%hw_var ones = Variable.reg spec ~width:5 in
   let%hw_var amount = Variable.wire ~default:(zero num_bits) () in
-  let%hw_var inner_data_is_valid = Variable.wire ~default:gnd () in
+  let inner_data_is_valid = Variable.wire ~default:gnd () in
   (* We don't need to name the range here since it's immediately used in the module
      output, which is automatically named when instantiating with [hierarchical] *)
-  let { D1p1_logic.O.count } =
-    D1p1_logic.hierarchical
+  let { D1_logic.O.count } =
+    D1_logic.Part1.hierarchical
       scope
-      { D1p1_logic.I.clock
+      { D1_logic.I.clock
       ; clear
       ; start
       ; direction = direction.value
@@ -109,7 +102,7 @@ let create scope ({ clock; clear; start; finish; data_in; data_in_valid } : _ I.
                     ]
                     [ hundreds <-- tens.value
                     ; tens <-- ones.value
-                    ; ones <-- sel_bottom data_in ~width:5
+                    ; ones <-- sel_bottom (data_in -:. Char.to_int '0') ~width:5
                     ]
                 ]
             ] )
@@ -124,5 +117,5 @@ let create scope ({ clock; clear; start; finish; data_in; data_in_valid } : _ I.
    waveforms and (optionally) the generated RTL. *)
 let hierarchical scope =
   let module Scoped = Hierarchy.In_scope (I) (O) in
-  Scoped.hierarchical ~scope ~name:"range_finder" create
+  Scoped.hierarchical ~scope ~name:"d1_byte" create
 ;;

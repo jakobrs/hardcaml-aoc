@@ -32,7 +32,8 @@ let () =
   Command_unix.run
     (Command.group
        ~summary:""
-       ; "d1-logic", rtl_command (module D1p1_logic) ~name:"d1_logic_top"
+       [ "d1p1-logic", rtl_command (module D1_logic.Part1) ~name:"d1p1_logic_top"
+       ; "d1p2-logic", rtl_command (module D1_logic.Part2) ~name:"d1p2_logic_top"
        ; "d1-byte", rtl_command (module D1_byte) ~name:"d1_byte_top"
        ])
 ;;
