@@ -2,10 +2,17 @@ open! Core
 open! Hardcaml
 open! Hardcaml_demo_project
 
-let generate_range_finder_rtl () =
-  let module C = Circuit.With_interface (Range_finder.I) (Range_finder.O) in
+module type S = sig
+  module I : Interface.S
+  module O : Interface.S
+
+  val hierarchical : Scope.t -> Signal.t I.t -> Signal.t O.t
+end
+
+let generate_rtl (module Comp : S) ~name () =
+  let module C = Circuit.With_interface (Comp.I) (Comp.O) in
   let scope = Scope.create ~auto_label_hierarchical_ports:true () in
-  let circuit = C.create_exn ~name:"range_finder_top" (Range_finder.hierarchical scope) in
+  let circuit = C.create_exn ~name (Comp.hierarchical scope) in
   let rtl_circuits =
     Rtl.create ~database:(Scope.circuit_database scope) Verilog [ circuit ]
   in
@@ -13,15 +20,19 @@ let generate_range_finder_rtl () =
   print_endline rtl
 ;;
 
-let range_finder_rtl_command =
+let rtl_command (module Comp : S) ~name =
   Command.basic
     ~summary:""
     [%map_open.Command
       let () = return () in
-      fun () -> generate_range_finder_rtl ()]
+      fun () -> generate_rtl (module Comp) ~name ()]
 ;;
 
 let () =
   Command_unix.run
-    (Command.group ~summary:"" [ "range-finder", range_finder_rtl_command ])
+    (Command.group
+       ~summary:""
+       ; "d1-logic", rtl_command (module D1p1_logic) ~name:"d1_logic_top"
+       ; "d1-byte", rtl_command (module D1_byte) ~name:"d1_byte_top"
+       ])
 ;;

@@ -7,7 +7,8 @@ open! Core
 open! Hardcaml
 open! Signal
 
-let num_bits = 16
+(* Number of bits for all state _except_ amount *)
+let num_bits = 9
 
 (* Every hardcaml module should have an I and an O record, which define the module
    interface. *)
@@ -17,7 +18,9 @@ module I = struct
     ; clear : 'a
     ; start : 'a
     ; finish : 'a
-    ; data_in : 'a [@bits num_bits]
+    ; direction : 'a
+    ; hundreds : 'a [@bits 16]
+    ; amount : 'a [@bits num_bits] (* Should be < 100 *)
     ; data_in_valid : 'a
     }
   [@@deriving hardcaml]
@@ -26,7 +29,7 @@ end
 module O = struct
   type 'a t =
     { (* With_valid.t is an Interface type that contains a [valid] and a [value] field. *)
-      range : 'a With_valid.t [@bits num_bits]
+      count : 'a With_valid.t [@bits 16]
     }
   [@@deriving hardcaml]
 end
@@ -39,7 +42,10 @@ module States = struct
   [@@deriving sexp_of, compare ~localize, enumerate]
 end
 
-let create scope ({ clock; clear; start; finish; data_in; data_in_valid } : _ I.t) : _ O.t
+let create
+  scope
+  ({ clock; clear; start; finish; direction; hundreds; amount; data_in_valid } : _ I.t)
+  : _ O.t
   =
   let spec = Reg_spec.create ~clock ~clear () in
   let open Always in
@@ -50,44 +56,58 @@ let create scope ({ clock; clear; start; finish; data_in; data_in_valid } : _ I.
   (* let%hw[_var] is a shorthand that automatically applies a name to the signal, which
      will show up in waveforms. The [_var] version is used when working with the Always
      DSL. *)
-  let%hw_var min = Variable.reg spec ~width:num_bits in
-  let%hw_var max = Variable.reg spec ~width:num_bits in
+  let%hw_var cur = Variable.reg spec ~width:num_bits in
+  let%hw_var cur_temp = Variable.wire ~default:(zero num_bits) () in
+  let%hw_var cur_temp_post_mod = Variable.wire ~default:(zero num_bits) () in
   (* We don't need to name the range here since it's immediately used in the module
      output, which is automatically named when instantiating with [hierarchical] *)
-  let range = Variable.wire ~default:(zero num_bits) () in
-  let range_valid = Variable.wire ~default:gnd () in
+  let count = Variable.reg spec ~width:16 in
+  let count_temp = Variable.wire ~default:count.value () in
+  let count_valid = Variable.wire ~default:gnd () in
   compile
     [ sm.switch
         [ ( Idle
           , [ when_
                 start
-                [ min <-- ones num_bits
-                ; max <-- zero num_bits
-                ; sm.set_next Accepting_inputs
-                ]
+                [ cur <-- of_signed_int ~width:num_bits 50; sm.set_next Accepting_inputs ]
             ] )
         ; ( Accepting_inputs
           , [ when_
                 data_in_valid
-                [ when_ (data_in <: min.value) [ min <-- data_in ]
-                ; when_ (data_in >: max.value) [ max <-- data_in ]
+                [ if_
+                    direction
+                    [ cur_temp <-- cur.value -: amount
+                    ; cur_temp_post_mod <-- cur_temp.value
+                    ; when_
+                        (cur_temp.value <+. 100)
+                        [ count_temp <-- count.value +:. 1
+                        ; cur_temp_post_mod <-- cur_temp.value +:. 100
+                        ]
+                    ]
+                    [ cur_temp <-- cur.value +: amount
+                    ; cur_temp_post_mod <-- cur_temp.value
+                    ; when_
+                        (cur_temp.value >=+. 100)
+                        [ count_temp <-- count.value +:. 1
+                        ; cur_temp_post_mod <-- cur_temp.value -:. 100
+                        ]
+                    ]
+                ; when_ (cur.value ==:. 0) [ count_temp <-- count.value ]
+                ; count <-- count_temp.value +: hundreds
+                ; cur <-- cur_temp_post_mod.value
                 ]
             ; when_ finish [ sm.set_next Done ]
             ] )
-        ; ( Done
-          , [ range <-- max.value -: min.value
-            ; range_valid <-- vdd
-            ; when_ finish [ sm.set_next Accepting_inputs ]
-            ] )
+        ; Done, [ count_valid <-- vdd; when_ finish [ sm.set_next Idle ] ]
         ]
     ];
   (* [.value] is used to get the underlying Signal.t from a Variable.t in the Always DSL. *)
-  { range = { value = range.value; valid = range_valid.value } }
+  { count = { value = count.value; valid = count_valid.value } }
 ;;
 
 (* The [hierarchical] wrapper is used to maintain module hierarchy in the generated
    waveforms and (optionally) the generated RTL. *)
 let hierarchical scope =
   let module Scoped = Hierarchy.In_scope (I) (O) in
-  Scoped.hierarchical ~scope ~name:"range_finder" create
+  Scoped.hierarchical ~scope ~name:"d1_logic" create
 ;;

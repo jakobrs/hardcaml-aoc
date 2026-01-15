@@ -14,14 +14,16 @@ module I : sig
     ; clear : 'a
     ; start : 'a
     ; finish : 'a
-    ; data_in : 'a
+    ; direction : 'a
+    ; hundreds : 'a
+    ; amount : 'a (* Should be < 100 *)
     ; data_in_valid : 'a
     }
   [@@deriving hardcaml]
 end
 
 module O : sig
-  type 'a t = { range : 'a With_valid.t } [@@deriving hardcaml]
+  type 'a t = { count : 'a With_valid.t } [@@deriving hardcaml]
 end
 
 val hierarchical : Scope.t -> Signal.t I.t -> Signal.t O.t

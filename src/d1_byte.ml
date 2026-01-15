@@ -1,0 +1,128 @@
+(* An example design that takes a series of input values and calculates the range between
+   the largest and smallest one. *)
+
+(* We generally open Core and Hardcaml in any source file in a hardware project. For
+   design source files specifically, we also open Signal. *)
+open! Core
+open! Hardcaml
+open! Signal
+
+let num_bits = Common.num_bits
+
+(* Every hardcaml module should have an I and an O record, which define the module
+   interface. *)
+module I = struct
+  type 'a t =
+    { clock : 'a
+    ; clear : 'a
+    ; start : 'a
+    ; finish : 'a
+    ; data_in : 'a [@bits num_bits]
+    ; data_in_valid : 'a
+    }
+  [@@deriving hardcaml]
+end
+
+module O = struct
+  type 'a t =
+    { (* With_valid.t is an Interface type that contains a [valid] and a [value] field. *)
+      count : 'a With_valid.t [@bits 16]
+    }
+  [@@deriving hardcaml]
+end
+
+module States = struct
+  type t =
+    | Idle
+    | Accepting_direction
+    | Accepting_amount
+    | Done
+  [@@deriving sexp_of, compare ~localize, enumerate]
+end
+
+let widen ~w a = zero (w - width a) @: a
+
+let rec mul a ?(shift = 0) = function
+  | 0 -> zero (width a)
+  | 1 -> a
+  | by when by mod 2 = 0 -> mul a ~shift:(shift + 1) (by / 2)
+  | by -> sll a ~by:shift +: mul a ~shift:(shift + 1) (by / 2)
+;;
+
+let create scope ({ clock; clear; start; finish; data_in; data_in_valid } : _ I.t) : _ O.t
+  =
+  let spec = Reg_spec.create ~clock ~clear () in
+  let open Always in
+  let sm =
+    (* Note that the state machine defaults to initializing to the first state *)
+    State_machine.create (module States) spec
+  in
+  (* let%hw[_var] is a shorthand that automatically applies a name to the signal, which
+     will show up in waveforms. The [_var] version is used when working with the Always
+     DSL. *)
+  let%hw_var direction = Variable.reg spec ~width:1 in
+  (* This is a kind of ring buffer thing, however, just doing it manually seems fine for now *)
+  let%hw_var hundreds = Variable.reg spec ~width:5 in
+  let%hw_var tens = Variable.reg spec ~width:5 in
+  let%hw_var ones = Variable.reg spec ~width:5 in
+  let%hw_var amount = Variable.wire ~default:(zero num_bits) () in
+  let%hw_var inner_data_is_valid = Variable.wire ~default:gnd () in
+  (* We don't need to name the range here since it's immediately used in the module
+     output, which is automatically named when instantiating with [hierarchical] *)
+  let { D1p1_logic.O.count } =
+    D1p1_logic.hierarchical
+      scope
+      { D1p1_logic.I.clock
+      ; clear
+      ; start
+      ; direction = direction.value
+      ; hundreds = hundreds.value
+      ; amount = amount.value
+      ; finish
+      ; data_in_valid = inner_data_is_valid.value
+      }
+  in
+  compile
+    [ sm.switch
+        [ Idle, [ when_ start [ sm.set_next Accepting_direction ] ]
+        ; ( Accepting_direction
+          , [ when_
+                data_in_valid
+                [ direction <-- (data_in ==:. Char.to_int 'L')
+                ; hundreds <--. 0
+                ; tens <--. 0
+                ; ones <--. 0
+                ; sm.set_next Accepting_amount
+                ]
+            ; when_ finish [ sm.set_next Done ]
+            ] )
+        ; ( Accepting_amount
+          , [ when_
+                data_in_valid
+                [ if_
+                    (data_in ==:. Char.to_int '\n')
+                    [ amount
+                      <-- mul (widen ~w:num_bits tens.value) 10
+                          +: widen ~w:num_bits ones.value
+                    ; inner_data_is_valid <-- vdd
+                    ; sm.set_next Accepting_direction
+                    ]
+                    [ hundreds <-- tens.value
+                    ; tens <-- ones.value
+                    ; ones <-- sel_bottom data_in ~width:5
+                    ]
+                ]
+            ] )
+        ; Done, [ when_ finish [ sm.set_next Idle ] ]
+        ]
+    ];
+  (* [.value] is used to get the underlying Signal.t from a Variable.t in the Always DSL. *)
+  { count }
+;;
+
+(* The [hierarchical] wrapper is used to maintain module hierarchy in the generated
+   waveforms and (optionally) the generated RTL. *)
+let hierarchical scope =
+  let module Scoped = Hierarchy.In_scope (I) (O) in
+  Scoped.hierarchical ~scope ~name:"range_finder" create
+;;
