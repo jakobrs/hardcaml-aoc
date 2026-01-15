@@ -24,4 +24,9 @@ module O : sig
   type 'a t = { count : 'a With_valid.t } [@@deriving hardcaml]
 end
 
-val hierarchical : Scope.t -> Signal.t I.t -> Signal.t O.t
+module Make (_ : D1_logic.Part) : sig
+  module I = I
+  module O = O
+
+  val hierarchical : Scope.t -> Signal.t I.t -> Signal.t O.t
+end

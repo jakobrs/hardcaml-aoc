@@ -6,11 +6,14 @@ module D1_logic = Hardcaml_demo_project.D1_logic
 module D1_byte = Hardcaml_demo_project.D1_byte
 
 let ( <--. ) = Bits.( <--. )
-let samples : string list = [ "L68\nL30\nR48\nL5\nR60\nL55\nL1\nL99\nR14\nL82\n" ]
 
-module Make (M : Hardcaml_demo_project.D1_logic.Part) = struct
+(* Note: added a hundreds' digit to L55 *)
+let samples : string list = [ "L68\nL30\nR48\nL5\nR60\nL255\nL1\nL99\nR14\nL82\n" ]
+
+module Make (Part : Hardcaml_demo_project.D1_logic.Part) = struct
   (* module Harness = Cyclesim_harness.Make (M.I) (M.O) *)
-  module Harness = Cyclesim_harness.Make (D1_byte.I) (D1_byte.O)
+  module M = D1_byte.Make (Part)
+  module Harness = Cyclesim_harness.Make (M.I) (M.O)
 
   let run_sample sample (sim : Harness.Sim.t) =
     let inputs = Cyclesim.inputs sim in
@@ -54,14 +57,11 @@ module Make (M : Hardcaml_demo_project.D1_logic.Part) = struct
       a waveterm file or a VCD file. *)
   let waves_config = Waves_config.no_waves
 
-  let test_simple () =
-    Harness.run_advanced
-      ~waves_config
-      ~create:D1_byte.hierarchical
-      (run_sample (List.nth_exn samples 0))
+  let test_simple input =
+    Harness.run_advanced ~waves_config ~create:M.hierarchical (run_sample input)
   ;;
 
-  let test_waves () =
+  let test_waves input =
     (* For simple tests, we can print the waveforms directly in an expect-test (and use the
         command [dune promote] to update it after the tests run). This is useful for quickly
         visualizing or documenting a simple circuit, but limits the amount of data that can
@@ -73,7 +73,7 @@ module Make (M : Hardcaml_demo_project.D1_logic.Part) = struct
       ]
     in
     Harness.run_advanced
-      ~create:D1_byte.hierarchical
+      ~create:M.hierarchical
       ~trace:`All_named
       ~print_waves_after_test:(fun waves ->
         Waveform.print
@@ -85,19 +85,19 @@ module Make (M : Hardcaml_demo_project.D1_logic.Part) = struct
           ~wave_width:1
           (* [wave_width] configures how many chars wide each clock cycle is *)
           waves)
-      (run_sample (List.nth_exn samples 0))
+      (run_sample input)
   ;;
 end
 
 module Mp1 = Make (D1_logic.Part1)
 
 let%expect_test "Simple test, optionally saving waveforms to disk" =
-  Mp1.test_simple ();
+  Mp1.test_simple (List.nth_exn samples 0);
   [%expect {| (Result (count 3)) |}]
 ;;
 
 let%expect_test "Simple test with printing waveforms directly" =
-  Mp1.test_waves ();
+  Mp1.test_waves (List.nth_exn samples 0);
   [%expect
     {|
     (Result (count 3))
@@ -167,15 +167,15 @@ let%expect_test "Simple test with printing waveforms directly" =
 module Mp2 = Make (D1_logic.Part2)
 
 let%expect_test "Simple test, optionally saving waveforms to disk" =
-  Mp2.test_simple ();
-  [%expect {| (Result (count 3)) |}]
+  Mp2.test_simple (List.nth_exn samples 0);
+  [%expect {| (Result (count 8)) |}]
 ;;
 
 let%expect_test "Simple test with printing waveforms directly" =
-  Mp2.test_waves ();
+  Mp2.test_waves (List.nth_exn samples 0);
   [%expect
     {|
-    (Result (count 3))
+    (Result (count 8))
     ┌Signals─────────────────────┐┌Waves─────────────────────────────────────────────────────────────────────────────────────────────┐
     │                            ││────────────────────────────────────┬───┬───────────────────────────┬───┬─────────────────────────│
     │d1_byte$amount              ││ 0                                  │68 │0                          │30 │0                        │
@@ -202,15 +202,21 @@ let%expect_test "Simple test with printing waveforms directly" =
     │                            ││────────────────┘                                                               └─────────────────│
     │d1_byte$d1_logic$i$finish   ││                                                                                                  │
     │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
+    │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
+    │d1_byte$d1_logic$i$hundreds ││ 0                                                                                                │
+    │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
     │d1_byte$d1_logic$i$start    ││        ┌───┐                                                                                     │
     │                            ││────────┘   └─────────────────────────────────────────────────────────────────────────────────────│
     │d1_byte$d1_logic$o$count$val││                                                                                                  │
     │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
-    │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
-    │d1_byte$d1_logic$o$count$val││ 0                                                                                                │
-    │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
+    │                            ││────────────────────────────────────────┬─────────────────────────────────────────────────────────│
+    │d1_byte$d1_logic$o$count$val││ 0                                      │1                                                        │
+    │                            ││────────────────────────────────────────┴─────────────────────────────────────────────────────────│
     │d1_byte$direction           ││                ┌───────────────────────────────────────────────────────────────┐                 │
     │                            ││────────────────┘                                                               └─────────────────│
+    │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
+    │d1_byte$hundreds            ││ 0                                                                                                │
+    │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
     │d1_byte$i$clear             ││────┐                                                                                             │
     │                            ││    └─────────────────────────────────────────────────────────────────────────────────────────────│
     │d1_byte$i$clock             ││┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─│
@@ -226,9 +232,9 @@ let%expect_test "Simple test with printing waveforms directly" =
     │                            ││────────┘   └─────────────────────────────────────────────────────────────────────────────────────│
     │d1_byte$o$count$valid       ││                                                                                                  │
     │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
-    │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
-    │d1_byte$o$count$value       ││ 0                                                                                                │
-    │                            ││──────────────────────────────────────────────────────────────────────────────────────────────────│
+    │                            ││────────────────────────────────────────┬─────────────────────────────────────────────────────────│
+    │d1_byte$o$count$value       ││ 0                                      │1                                                        │
+    │                            ││────────────────────────────────────────┴─────────────────────────────────────────────────────────│
     │                            ││────────────────────────┬───────┬───────────────┬───────┬───────┬───────────────────────┬───────┬─│
     │d1_byte$ones                ││ 0                      │6      │8              │0      │3      │0                      │4      │8│
     │                            ││────────────────────────┴───────┴───────────────┴───────┴───────┴───────────────────────┴───────┴─│
@@ -237,4 +243,16 @@ let%expect_test "Simple test with printing waveforms directly" =
     │                            ││────────────────────────────────┴───────────────┴───────────────┴───────────────┴───────────────┴─│
     └────────────────────────────┘└──────────────────────────────────────────────────────────────────────────────────────────────────┘
     |}]
+;;
+
+let%expect_test "Test on real input (part 1)" =
+  Mp1.test_simple
+    (In_channel.read_all "/home/user/Projects/hardcaml_template_project/input");
+  [%expect {| (Result (count 1118)) |}]
+;;
+
+let%expect_test "Test on real input (part 2)" =
+  Mp2.test_simple
+    (In_channel.read_all "/home/user/Projects/hardcaml_template_project/input");
+  [%expect {| (Result (count 6289)) |}]
 ;;
