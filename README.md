@@ -26,3 +26,7 @@ def accepting_inputs(direction, amount):
 The implementation of `D1_byte` is again mostly straightforward. The digits in the input are stored in an ad hoc shift register thing, so that we can treat the hundreds specially later. When it receives a newline, it sends the received command to an embedded `D1_logic` component.
 
 The implementation of the tests is uninteresting.
+
+## How to run
+
+`dune test` and observe the tests work, or `dune exec bin/generate.exe [...]` to generate verilog.
