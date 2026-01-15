@@ -19,7 +19,7 @@ module I = struct
     ; start : 'a
     ; finish : 'a
     ; direction : 'a
-    ; hundreds : 'a [@bits num_bits]
+    ; hundreds : 'a [@bits 5]
     ; amount : 'a [@bits num_bits] (* Should be < 100 *)
     ; data_in_valid : 'a
     }

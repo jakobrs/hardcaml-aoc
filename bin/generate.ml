@@ -2,30 +2,14 @@ open! Core
 open! Hardcaml
 open! Hardcaml_demo_project
 
-module type S = sig
-  module I : Interface.S
-  module O : Interface.S
-
-  val hierarchical : Scope.t -> Signal.t I.t -> Signal.t O.t
-end
-
-let generate_rtl (module Comp : S) ~name () =
-  let module C = Circuit.With_interface (Comp.I) (Comp.O) in
-  let scope = Scope.create ~auto_label_hierarchical_ports:true () in
-  let circuit = C.create_exn ~name (Comp.hierarchical scope) in
-  let rtl_circuits =
-    Rtl.create ~database:(Scope.circuit_database scope) Verilog [ circuit ]
-  in
-  let rtl = Rtl.full_hierarchy rtl_circuits |> Rope.to_string in
-  print_endline rtl
-;;
+module type S = Rtl_gen.S
 
 let rtl_command (module Comp : S) ~name =
   Command.basic
     ~summary:""
     [%map_open.Command
       let () = return () in
-      fun () -> generate_rtl (module Comp) ~name ()]
+      fun () -> print_endline @@ Rtl_gen.generate_rtl (module Comp) ~name]
 ;;
 
 let () =
