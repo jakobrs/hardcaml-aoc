@@ -19,7 +19,7 @@ module I = struct
     ; clear : 'a
     ; start : 'a
     ; finish : 'a
-    ; data_in : 'a [@bits num_bits]
+    ; data_in : 'a [@bits 8]
     ; data_in_valid : 'a
     }
   [@@deriving hardcaml]
