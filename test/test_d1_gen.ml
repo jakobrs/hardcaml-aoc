@@ -11,9 +11,9 @@ let%test_unit "Test generation part 2 logic version" =
 ;;
 
 let%test_unit "Test generation part 1 ascii version" =
-  ignore @@ Rtl_gen.generate_rtl (module D1_byte.Make (D1_logic.Part1)) ~name:"d1p2_logic"
+  ignore @@ Rtl_gen.generate_rtl (module D1_byte.Make (D1_logic.Part1)) ~name:"d1p1_byte"
 ;;
 
 let%test_unit "Test generation part 2 ascii version" =
-  ignore @@ Rtl_gen.generate_rtl (module D1_byte.Make (D1_logic.Part2)) ~name:"d1p2_logic"
+  ignore @@ Rtl_gen.generate_rtl (module D1_byte.Make (D1_logic.Part2)) ~name:"d1p2_byte"
 ;;
